@@ -63,11 +63,48 @@ export const useCart = () => {
     setSelectedCoupon(coupon);
   };
 
-  const calculateTotal = () => ({
-    totalBeforeDiscount: 0,
-    totalAfterDiscount: 0,
-    totalDiscount: 0,
-  });
+  // 상품 총 금액 계산 함수
+  const calculateTotal = () => {
+    // 장바구니에 담긴 상품들의 총 금액 계산
+    const totalBeforeDiscount = cart.reduce((acc, item) => {
+      return acc + item.product.price * item.quantity;
+    }, 0);
+
+    // 할인 적용 후 총 금액 계산
+    const totalAfterDiscount = cart.reduce((acc, item) => {
+      const itemTotal = item.product.price * item.quantity;
+
+      // 상품 자체에 할인이 있는 경우 계산
+      const productDiscount = item.product.discounts.reduce(
+        (maxDiscount, discount) => {
+          return item.quantity >= discount.quantity
+            ? Math.max(maxDiscount, discount.rate)
+            : maxDiscount;
+        },
+        0
+      );
+      // 할인 적용
+      const itemAfterDiscount = itemTotal * (1 - productDiscount);
+
+      return acc + itemAfterDiscount;
+    }, 0);
+
+    // 쿠폰 적용 후 총 금액 계산
+    const totalAfterCoupon = selectedCoupon
+      ? selectedCoupon.discountType === "amount"
+        ? Math.max(0, totalAfterDiscount - selectedCoupon.discountValue)
+        : totalAfterDiscount * (1 - selectedCoupon.discountValue / 100)
+      : totalAfterDiscount;
+
+    // 할인된 금액 계산
+    const totalDiscount = totalBeforeDiscount - totalAfterCoupon;
+
+    return {
+      totalBeforeDiscount: Math.round(totalBeforeDiscount),
+      totalAfterDiscount: Math.round(totalAfterCoupon),
+      totalDiscount: Math.round(totalDiscount),
+    };
+  };
 
   return {
     cart,
