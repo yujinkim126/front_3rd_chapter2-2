@@ -1,8 +1,12 @@
-import { useState } from "react";
-import { CartItem, Coupon, Product } from "../../types.ts";
-import { useCoupons } from "../../refactoring/hooks/useCoupon.ts";
-import { useProducts } from "../../refactoring/hooks/useProduct.ts";
-import { useCart } from "../../refactoring/hooks/useCart.ts";
+import { Coupon, Product } from "../../types";
+import { useCoupons } from "../../refactoring/hooks/useCoupon";
+import { useProducts } from "../../refactoring/hooks/useProduct";
+import { useCart } from "../../refactoring/hooks/useCart";
+import {
+  calculateCartTotal,
+  getMaxApplicableDiscount,
+  updateCartItemQuantity,
+} from "../../refactoring/hooks/utils/cartUtils";
 
 interface Props {
   products: Product[];
@@ -10,119 +14,25 @@ interface Props {
 }
 
 export const CartPage = ({ products, coupons }: Props) => {
-  const [cart, setCart] = useState<CartItem[]>([]);
   const { products: productData } = useProducts(products);
   const { coupons: couponData } = useCoupons(coupons);
-  const { selectedCoupon, applyCoupon } = useCart();
+  const { cart, addToCart, removeFromCart, selectedCoupon, applyCoupon } =
+    useCart();
 
+  // 재고 수량을 반환하는 함수
   const getRemainingStock = (product: Product) => {
     const cartItem = cart.find((item) => item.product.id === product.id);
     return product.stock - (cartItem?.quantity || 0);
   };
 
-  const addToCart = (product: Product) => {
-    const remainingStock = getRemainingStock(product);
-    if (remainingStock <= 0) return;
-
-    setCart((prevCart) => {
-      const existingItem = prevCart.find(
-        (item) => item.product.id === product.id
-      );
-      if (existingItem) {
-        return prevCart.map((item) =>
-          item.product.id === product.id
-            ? { ...item, quantity: Math.min(item.quantity + 1, product.stock) }
-            : item
-        );
-      }
-      return [...prevCart, { product, quantity: 1 }];
-    });
-  };
-
-  const removeFromCart = (productId: string) => {
-    setCart((prevCart) =>
-      prevCart.filter((item) => item.product.id !== productId)
-    );
-  };
-
-  const updateQuantity = (productId: string, newQuantity: number) => {
-    setCart((prevCart) =>
-      prevCart
-        .map((item) => {
-          if (item.product.id === productId) {
-            const maxQuantity = item.product.stock;
-            const updatedQuantity = Math.max(
-              0,
-              Math.min(newQuantity, maxQuantity)
-            );
-            return updatedQuantity > 0
-              ? { ...item, quantity: updatedQuantity }
-              : null;
-          }
-          return item;
-        })
-        .filter((item): item is CartItem => item !== null)
-    );
-  };
-
+  // 총액 계산 함수
   const calculateTotal = () => {
-    let totalBeforeDiscount = 0;
-    let totalAfterDiscount = 0;
-
-    cart.forEach((item) => {
-      const { price } = item.product;
-      const { quantity } = item;
-      totalBeforeDiscount += price * quantity;
-
-      const discount = item.product.discounts.reduce((maxDiscount, d) => {
-        return quantity >= d.quantity && d.rate > maxDiscount
-          ? d.rate
-          : maxDiscount;
-      }, 0);
-
-      totalAfterDiscount += price * quantity * (1 - discount);
-    });
-
-    let totalDiscount = totalBeforeDiscount - totalAfterDiscount;
-
-    // 쿠폰 적용
-    if (selectedCoupon) {
-      if (selectedCoupon.discountType === "amount") {
-        totalAfterDiscount = Math.max(
-          0,
-          totalAfterDiscount - selectedCoupon.discountValue
-        );
-      } else {
-        totalAfterDiscount *= 1 - selectedCoupon.discountValue / 100;
-      }
-      totalDiscount = totalBeforeDiscount - totalAfterDiscount;
-    }
-
-    return {
-      totalBeforeDiscount: Math.round(totalBeforeDiscount),
-      totalAfterDiscount: Math.round(totalAfterDiscount),
-      totalDiscount: Math.round(totalDiscount),
-    };
+    return calculateCartTotal(cart, selectedCoupon);
   };
 
-  const getMaxDiscount = (discounts: { quantity: number; rate: number }[]) => {
-    return discounts.reduce((max, discount) => Math.max(max, discount.rate), 0);
-  };
-
+  // 할인 전 금액 / 할인 후 금액 / 할인된 금액 계산 함수
   const { totalBeforeDiscount, totalAfterDiscount, totalDiscount } =
     calculateTotal();
-
-  const getAppliedDiscount = (item: CartItem) => {
-    const { discounts } = item.product;
-    const { quantity } = item;
-    let appliedDiscount = 0;
-    for (const discount of discounts) {
-      if (quantity >= discount.quantity) {
-        appliedDiscount = Math.max(appliedDiscount, discount.rate);
-      }
-    }
-    return appliedDiscount;
-  };
 
   return (
     <div className="container mx-auto p-4">
@@ -156,8 +66,13 @@ export const CartPage = ({ products, coupons }: Props) => {
                     {product.discounts.length > 0 && (
                       <span className="ml-2 font-medium text-blue-600">
                         최대{" "}
-                        {(getMaxDiscount(product.discounts) * 100).toFixed(0)}%
-                        할인
+                        {(
+                          getMaxApplicableDiscount({
+                            product,
+                            quantity: 1,
+                          }) * 100
+                        ).toFixed(0)}
+                        % 할인
                       </span>
                     )}
                   </div>
@@ -192,7 +107,7 @@ export const CartPage = ({ products, coupons }: Props) => {
 
           <div className="space-y-2">
             {cart.map((item) => {
-              const appliedDiscount = getAppliedDiscount(item);
+              const appliedDiscount = getMaxApplicableDiscount(item);
               return (
                 <div
                   key={item.product.id}
@@ -213,7 +128,11 @@ export const CartPage = ({ products, coupons }: Props) => {
                   <div>
                     <button
                       onClick={() =>
-                        updateQuantity(item.product.id, item.quantity - 1)
+                        updateCartItemQuantity(
+                          cart,
+                          item.product.id,
+                          item.quantity - 1
+                        )
                       }
                       className="bg-gray-300 text-gray-800 px-2 py-1 rounded mr-1 hover:bg-gray-400"
                     >
@@ -221,7 +140,11 @@ export const CartPage = ({ products, coupons }: Props) => {
                     </button>
                     <button
                       onClick={() =>
-                        updateQuantity(item.product.id, item.quantity + 1)
+                        updateCartItemQuantity(
+                          cart,
+                          item.product.id,
+                          item.quantity + 1
+                        )
                       }
                       className="bg-gray-300 text-gray-800 px-2 py-1 rounded mr-1 hover:bg-gray-400"
                     >
