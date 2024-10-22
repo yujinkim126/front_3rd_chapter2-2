@@ -1,6 +1,8 @@
 import { useState } from "react";
 import { CartItem, Coupon, Product } from "../../types.ts";
 import { useCoupons } from "../../refactoring/hooks/useCoupon.ts";
+import { useProducts } from "../../refactoring/hooks/useProduct.ts";
+import { useCart } from "../../refactoring/hooks/useCart.ts";
 
 interface Props {
   products: Product[];
@@ -9,11 +11,14 @@ interface Props {
 
 export const CartPage = ({ products, coupons }: Props) => {
   const [cart, setCart] = useState<CartItem[]>([]);
-  const {
-    coupons: couponData,
-    selectedCoupon,
-    applyCoupon,
-  } = useCoupons(coupons);
+  const { products: productData } = useProducts(products);
+  const { coupons: couponData } = useCoupons(coupons);
+  const { selectedCoupon, applyCoupon } = useCart();
+
+  const getRemainingStock = (product: Product) => {
+    const cartItem = cart.find((item) => item.product.id === product.id);
+    return product.stock - (cartItem?.quantity || 0);
+  };
 
   const addToCart = (product: Product) => {
     const remainingStock = getRemainingStock(product);
@@ -104,11 +109,6 @@ export const CartPage = ({ products, coupons }: Props) => {
     return discounts.reduce((max, discount) => Math.max(max, discount.rate), 0);
   };
 
-  const getRemainingStock = (product: Product) => {
-    const cartItem = cart.find((item) => item.product.id === product.id);
-    return product.stock - (cartItem?.quantity || 0);
-  };
-
   const { totalBeforeDiscount, totalAfterDiscount, totalDiscount } =
     calculateTotal();
 
@@ -131,7 +131,7 @@ export const CartPage = ({ products, coupons }: Props) => {
         <div>
           <h2 className="text-2xl font-semibold mb-4">상품 목록</h2>
           <div className="space-y-2">
-            {products.map((product) => {
+            {productData.map((product) => {
               const remainingStock = getRemainingStock(product);
               return (
                 <div
@@ -242,7 +242,7 @@ export const CartPage = ({ products, coupons }: Props) => {
           <div className="mt-6 bg-white p-4 rounded shadow">
             <h2 className="text-2xl font-semibold mb-2">쿠폰 적용</h2>
             <select
-              onChange={(e) => applyCoupon(parseInt(e.target.value))}
+              onChange={(e) => applyCoupon(coupons[parseInt(e.target.value)])}
               className="w-full p-2 border rounded mb-2"
             >
               <option value="">쿠폰 선택</option>
