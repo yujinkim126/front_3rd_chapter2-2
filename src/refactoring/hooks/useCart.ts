@@ -36,25 +36,24 @@ export const useCart = () => {
   };
 
   // 장바구니 제품 수량 업데이트 함수
-  const updateQuantity = (product: Product, newQuantity: number) => {
-    // cart에서 productId가 있는지 확인
-    const existingItem = cart.find((item) => item.product.id === product.id);
-
-    let updatedCart;
-    if (existingItem) {
-      // 기존 상품이 있을 경우 수량 업데이트
-      updatedCart = cart.map((item) => {
-        if (item.product.id === product.id) {
-          return { ...item, quantity: newQuantity };
-        }
-        return item; // 다른 상품들은 그대로 유지
-      });
-    } else {
-      // 상품이 없을 경우 새로운 상품을 추가
-      updatedCart = [...cart, { product, quantity: newQuantity }];
-    }
-
-    setCart(updatedCart);
+  const updateQuantity = (productId: string, newQuantity: number) => {
+    setCart((prevCart) =>
+      prevCart
+        .map((item) => {
+          if (item.product.id === productId) {
+            const maxQuantity = item.product.stock;
+            const updatedQuantity = Math.max(
+              0,
+              Math.min(newQuantity, maxQuantity)
+            );
+            return updatedQuantity > 0
+              ? { ...item, quantity: updatedQuantity }
+              : null;
+          }
+          return item;
+        })
+        .filter((item): item is CartItem => item !== null)
+    );
   };
 
   // 쿠폰 선택 (적용) 함수
