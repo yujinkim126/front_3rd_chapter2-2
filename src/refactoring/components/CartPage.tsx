@@ -5,6 +5,7 @@ import { useCart } from "../../refactoring/hooks/useCart";
 import {
   calculateCartTotal,
   getMaxApplicableDiscount,
+  updateCartItemQuantity,
 } from "../../refactoring/hooks/utils/cartUtils";
 
 interface Props {
@@ -15,14 +16,8 @@ interface Props {
 export const CartPage = ({ products, coupons }: Props) => {
   const { products: productData } = useProducts(products);
   const { coupons: couponData } = useCoupons(coupons);
-  const {
-    cart,
-    addToCart,
-    removeFromCart,
-    selectedCoupon,
-    applyCoupon,
-    updateQuantity,
-  } = useCart();
+  const { cart, addToCart, removeFromCart, selectedCoupon, applyCoupon } =
+    useCart();
 
   // 재고 수량을 반환하는 함수
   const getRemainingStock = (product: Product) => {
@@ -133,7 +128,11 @@ export const CartPage = ({ products, coupons }: Props) => {
                   <div>
                     <button
                       onClick={() =>
-                        updateQuantity(item.product.id, item.quantity - 1)
+                        updateCartItemQuantity(
+                          cart,
+                          item.product.id,
+                          item.quantity - 1
+                        )
                       }
                       className="bg-gray-300 text-gray-800 px-2 py-1 rounded mr-1 hover:bg-gray-400"
                     >
@@ -141,7 +140,11 @@ export const CartPage = ({ products, coupons }: Props) => {
                     </button>
                     <button
                       onClick={() =>
-                        updateQuantity(item.product.id, item.quantity + 1)
+                        updateCartItemQuantity(
+                          cart,
+                          item.product.id,
+                          item.quantity + 1
+                        )
                       }
                       className="bg-gray-300 text-gray-800 px-2 py-1 rounded mr-1 hover:bg-gray-400"
                     >
